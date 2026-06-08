@@ -1,0 +1,12 @@
+{
+  "name": "video-player",
+  "version": "1.0.0",
+  "description": "순수 HTML/CSS/JavaScript로 만든 미니 비디오 플레이어 (런타임 라이브러리 0개)",
+  "private": true,
+  "scripts": {
+    "start": "http-server . -p 8080 -c-1 -o"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

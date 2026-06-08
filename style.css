@@ -1,0 +1,379 @@
+/* ===========================================================
+   video-player — 스타일 (시네마틱 미니멀)
+   레이아웃·색·모션 담당. 동작 로직은 전부 player.js.
+   =========================================================== */
+
+:root {
+  --bg:      #08090c;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-strong: rgba(20, 22, 28, 0.72);
+  --line:    rgba(255, 255, 255, 0.10);
+  --accent:  #ff375f;            /* 진행바·포인트 */
+  --text:    #f3f4f6;
+  --muted:   #8b9099;
+
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --font-ui:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: var(--font-ui);
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(255, 55, 95, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 110%, rgba(80, 120, 255, 0.06), transparent 55%),
+    var(--bg);
+  display: flex;
+  justify-content: center;
+}
+
+.page { width: min(940px, 92vw); padding: clamp(28px, 6vw, 64px) 0 64px; }
+
+/* ===== 머리말 ===== */
+.masthead { margin-bottom: 22px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-style: italic;
+  font-size: clamp(36px, 6vw, 56px);
+  letter-spacing: 0.5px;
+  margin: 0;
+  line-height: 1;
+  background: linear-gradient(180deg, #fff, #c9ccd2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hint { color: var(--muted); font-size: 13.5px; margin: 10px 0 0; }
+.kbd-inline { color: var(--text); border-bottom: 1px dotted var(--muted); }
+
+/* ===== 플레이어 ===== */
+.player {
+  position: relative;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  user-select: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 30px 60px -20px rgba(0, 0, 0, 0.8),
+    0 0 0 1px var(--line);
+}
+.player video { width: 100%; height: 100%; display: block; object-fit: contain; }
+
+/* 커서: 재생 중 잠시 멈추면 숨기고 싶을 때 쓰라고 클래스만 준비 */
+.player.is-playing.hide-cursor { cursor: none; }
+
+/* ===== 드롭 안내 ===== */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.03), transparent 60%),
+    #0a0b0f;
+  color: var(--muted);
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+.player[data-state="ready"] .drop-overlay { display: none; }
+.player.dragover .drop-overlay { background: #11141c; color: var(--text); }
+.player.dragover .drop-icon { transform: translateY(3px); }
+
+.drop-box { display: grid; place-items: center; gap: 12px; font-size: 14.5px; letter-spacing: 0.2px; }
+.drop-icon { width: 46px; height: 46px; opacity: 0.8; transition: transform 0.25s var(--ease); }
+
+/* ===== 큰 재생 버튼 ===== */
+.big-play {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 78px; height: 78px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: opacity 0.25s var(--ease), transform 0.12s var(--ease), background 0.2s;
+}
+.big-play .ic { width: 30px; height: 30px; margin-left: 3px; } /* 삼각형 광학 보정 */
+.big-play:hover { background: rgba(255, 55, 95, 0.85); border-color: transparent; }
+.big-play:active { transform: translate(-50%, -50%) scale(0.93); }
+.player[data-state="empty"] .big-play,
+.player.is-playing .big-play { opacity: 0; pointer-events: none; }
+
+/* ===== 컨트롤바 ===== */
+.controls {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 36px 16px 14px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.35) 35%, rgba(0, 0, 0, 0.85));
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
+}
+.player[data-state="ready"]:hover .controls,
+.player[data-state="ready"]:not(.is-playing) .controls,
+.player[data-state="ready"]:focus-within .controls {
+  opacity: 1;
+  transform: translateY(0);
+}
+.player[data-state="empty"] .controls { display: none; }
+
+.controls__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+.controls__group { display: flex; align-items: center; gap: 6px; }
+
+/* ===== 타임라인 ===== */
+.timeline {
+  position: relative;
+  height: 16px;                 /* 클릭 영역은 넉넉하게, 보이는 막대는 얇게 */
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.timeline__rail {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  overflow: hidden;
+  transition: height 0.15s var(--ease);
+}
+.timeline:hover .timeline__rail { height: 6px; }
+.timeline__buffered,
+.timeline__played {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  border-radius: 999px;
+}
+.timeline__buffered { background: rgba(255, 255, 255, 0.30); }
+.timeline__played   { background: var(--accent); }
+.timeline__thumb {
+  position: absolute;
+  top: 50%; left: 0%;
+  width: 13px; height: 13px;
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  box-shadow: 0 0 0 4px rgba(255, 55, 95, 0.25);
+  transition: transform 0.15s var(--ease);
+  pointer-events: none;
+}
+.timeline:hover .timeline__thumb { transform: translate(-50%, -50%) scale(1); }
+
+/* 위치 미리보기 툴팁 */
+.timeline__preview {
+  position: absolute;
+  bottom: 20px;
+  left: 0%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.12s var(--ease);
+}
+.timeline:hover .timeline__preview { opacity: 1; }
+
+/* ===== 버튼 ===== */
+.btn {
+  display: grid;
+  place-items: center;
+  width: 38px; height: 38px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), transform 0.1s var(--ease);
+}
+.btn .ic { width: 21px; height: 21px; }
+.btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.btn:active { transform: scale(0.9); }
+
+/* 재생/정지 아이콘은 .is-playing 클래스로 CSS가 자동 전환 */
+#playPause .ic-pause { display: none; }
+.player.is-playing #playPause .ic-play  { display: none; }
+.player.is-playing #playPause .ic-pause { display: block; }
+
+/* 음소거 아이콘은 data-level(high/low/mute)로 전환 */
+#mute .ic { display: none; }
+#mute[data-level="high"] .ic-vol-high { display: block; }
+#mute[data-level="low"]  .ic-vol-low  { display: block; }
+#mute[data-level="mute"] .ic-vol-mute { display: block; }
+
+/* ===== 시간 표시 ===== */
+.time {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.time__cur { color: var(--text); }
+.time__sep { color: var(--muted); }
+.time__dur { color: var(--muted); }
+
+/* ===== 볼륨 ===== */
+.volume-wrap { display: flex; align-items: center; }
+.slider {
+  width: 0;                      /* 평소엔 접혀 있다가 hover 시 펼쳐짐 */
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: width 0.22s var(--ease), opacity 0.22s var(--ease), margin 0.22s var(--ease);
+}
+.volume-wrap:hover .slider,
+.slider:focus-visible { width: 78px; opacity: 1; margin-left: 6px; }
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #fff;
+}
+.slider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* ===== 커스텀 드롭다운 (배속 / fps) ===== */
+.menu { position: relative; }
+
+/* 메뉴를 여는 알약형 버튼 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 9px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.pill:hover { border-color: rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.09); }
+/* 정적 칩(fps 표시) — 클릭/호버 반응 없음 */
+.pill--static { cursor: default; }
+.pill--static:hover { border-color: var(--line); background: var(--surface); }
+.pill__label  { font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase; }
+.pill__value  { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); }
+.pill__chevron{ width: 12px; height: 12px; color: var(--muted); transition: transform 0.18s var(--ease); }
+.menu.open .pill         { border-color: rgba(255, 255, 255, 0.28); background: rgba(255, 255, 255, 0.10); }
+.menu.open .pill__chevron{ transform: rotate(180deg); }
+
+/* 펼쳐지는 목록 — 컨트롤바 위로 떠오름 */
+.menu__list {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  min-width: 100%;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.96);
+  transform-origin: bottom center;
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease), visibility 0.16s;
+}
+.menu.open .menu__list { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 7px 11px;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s var(--ease);
+}
+.menu__item:hover { background: rgba(255, 255, 255, 0.10); }
+.menu__item.is-selected { color: var(--accent); }
+.menu__item.is-selected::after { content: "✓"; margin-left: auto; font-size: 12px; }
+
+/* ===== 파일 열기 ===== */
+.file-row { margin-top: 20px; }
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--text);
+  color: #0a0b0f;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s var(--ease), filter 0.15s var(--ease);
+}
+.file-btn svg { width: 18px; height: 18px; }
+.file-btn:hover { filter: brightness(1.05); }
+.file-btn:active { transform: scale(0.97); }
+
+/* ===== 단축키 ===== */
+.shortcuts { margin-top: 22px; color: var(--muted); font-size: 13px; }
+.shortcuts summary { cursor: pointer; width: fit-content; }
+.shortcuts summary:hover { color: var(--text); }
+.shortcuts ul { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.shortcuts li { display: flex; align-items: center; gap: 8px; }
+kbd {
+  font-family: var(--font-mono);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--text);
+}

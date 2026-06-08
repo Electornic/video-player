@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>video-player</title>
+
+  <!-- 폰트: 제목용 세리프(Instrument Serif) + 타임코드용 모노(JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <h1>video-player</h1>
+      <p class="hint">영상을 끌어다 놓거나 <span class="kbd-inline">파일 열기</span>로 선택하세요</p>
+    </header>
+
+    <!--
+      .player = 플레이어 전체 컨테이너.
+      data-state 로 "영상 없음/있음" 상태를 CSS에서 구분합니다.
+    -->
+    <div class="player" id="player" data-state="empty">
+      <!-- 실제 영상. 기본 컨트롤(controls)은 끄고 우리가 직접 만듭니다 -->
+      <video id="video" playsinline src="sample/sample1.mp4"></video>
+
+      <!-- 영상이 없을 때 드롭 안내 -->
+      <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-box">
+          <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+          </svg>
+          <span>여기에 영상을 끌어다 놓기</span>
+        </div>
+      </div>
+
+      <!-- 가운데 큰 재생 버튼 (영상 클릭 시 토글) -->
+      <button class="big-play" id="bigPlay" aria-label="재생">
+        <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+      </button>
+
+      <!-- ===== 컨트롤바 ===== -->
+      <div class="controls" id="controls">
+        <!-- 진행바(타임라인) -->
+        <div class="timeline" id="timeline">
+          <div class="timeline__rail">
+            <div class="timeline__buffered" id="buffered"></div>
+            <div class="timeline__played" id="played"></div>
+          </div>
+          <div class="timeline__thumb" id="thumb"></div>
+          <!-- 마우스 올린 위치의 시간 미리보기 -->
+          <div class="timeline__preview" id="preview">0:00</div>
+        </div>
+
+        <div class="controls__row">
+          <!-- 왼쪽 -->
+          <div class="controls__group">
+            <button id="playPause" class="btn" aria-label="재생/일시정지">
+              <svg class="ic ic-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+              <svg class="ic ic-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.4" height="14" rx="1.2" /><rect x="14.1" y="5" width="3.4" height="14" rx="1.2" /></svg>
+            </button>
+
+            <button id="prevFrame" class="btn" title="이전 프레임 (,)" aria-label="이전 프레임">
+              <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M18 6 9 12l9 6z" /><rect x="5.5" y="6" width="2" height="12" rx="1" /></svg>
+            </button>
+            <button id="nextFrame" class="btn" title="다음 프레임 (.)" aria-label="다음 프레임">
+              <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6l9 6-9 6z" /><rect x="16.5" y="6" width="2" height="12" rx="1" /></svg>
+            </button>
+
+            <span class="time" id="time"><span class="time__cur">0:00</span><span class="time__sep">/</span><span class="time__dur">0:00</span></span>
+          </div>
+
+          <!-- 오른쪽 -->
+          <div class="controls__group">
+            <div class="volume-wrap">
+              <button id="mute" class="btn" data-level="high" aria-label="음소거">
+                <svg class="ic ic-vol-high" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor" stroke="none" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M18.5 5.5a9 9 0 0 1 0 13" /></svg>
+                <svg class="ic ic-vol-low" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor" stroke="none" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>
+                <svg class="ic ic-vol-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor" stroke="none" /><path d="m16 9 5 6m0-6-5 6" /></svg>
+              </button>
+              <input id="volume" class="slider" type="range" min="0" max="1" step="0.01" value="1" aria-label="볼륨" />
+            </div>
+
+            <!-- 배속: 커스텀 드롭다운 (네이티브 select의 펼침 UI를 대체) -->
+            <div class="menu" id="rateMenu">
+              <button type="button" class="pill" aria-haspopup="listbox" aria-expanded="false">
+                <span class="pill__label">배속</span>
+                <span class="pill__value">1×</span>
+                <svg class="pill__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+              <ul class="menu__list" role="listbox" aria-label="배속">
+                <li class="menu__item" role="option" data-value="0.25">0.25×</li>
+                <li class="menu__item" role="option" data-value="0.5">0.5×</li>
+                <li class="menu__item is-selected" role="option" data-value="1">1×</li>
+                <li class="menu__item" role="option" data-value="1.5">1.5×</li>
+                <li class="menu__item" role="option" data-value="2">2×</li>
+              </ul>
+            </div>
+
+            <!-- fps: 영상 재생 시 자동 감지(requestVideoFrameCallback). 수동 선택 없음 -->
+            <div class="pill pill--static" id="fpsDisplay" title="재생을 시작하면 프레임레이트를 자동으로 감지합니다">
+              <span class="pill__label">fps</span>
+              <span class="pill__value" id="fpsValue">⋯</span>
+            </div>
+
+            <button id="pip" class="btn" title="화면 속 화면 (p)" aria-label="화면 속 화면">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><rect x="12.5" y="11.5" width="7" height="5.5" rx="1" fill="currentColor" stroke="none" /></svg>
+            </button>
+
+            <button id="fullscreen" class="btn" title="전체화면 (f)" aria-label="전체화면">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3m0 8v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="file-row">
+      <label class="file-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /></svg>
+        파일 열기
+        <input type="file" id="fileInput" accept="video/*" hidden />
+      </label>
+    </div>
+
+    <details class="shortcuts">
+      <summary>단축키</summary>
+      <ul>
+        <li><kbd>Space</kbd> <kbd>K</kbd> 재생/일시정지</li>
+        <li><kbd>←</kbd> <kbd>→</kbd> 5초 이동</li>
+        <li><kbd>,</kbd> <kbd>.</kbd> 한 프레임 이동</li>
+        <li><kbd>↑</kbd> <kbd>↓</kbd> 볼륨</li>
+        <li><kbd>M</kbd> 음소거 · <kbd>F</kbd> 전체화면 · <kbd>P</kbd> 화면 속 화면</li>
+      </ul>
+    </details>
+  </main>
+
+  <script src="player.js"></script>
+</body>
+</html>
